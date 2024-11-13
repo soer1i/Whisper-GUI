@@ -13,14 +13,19 @@
 
 1. Create a virtual environment: .venv  
     Make sure to initialize the virtual environment using the correct python version (3.9 or 3.10 see notes):
-    > C:\Users\\[UserName]\AppData\Local\Programs\Python\Python39\python.exe -m venv .venv
-2. Activate the virtual environment  
-    > .venv\Scripts\activate
-3. Install the following dependencies:
-    - (.venv) ...> pip install git+https://github.com/openai/whisper.git
-    - (.venv) ...> pip install blobfile
-    - (.venv) ...> pip install nicegui 
-    - (.venv) ...> pip install openpyxl
+   
+       C:\Users\\[UserName]\AppData\Local\Programs\Python\Python39\python.exe -m venv .venv
+   
+3. Activate the virtual environment
+   
+       .venv\Scripts\activate
+   
+5. Install the following dependencies (activate .venv !):
+   
+       pip install git+https://github.com/openai/whisper.git  
+       pip install blobfile  
+       pip install nicegui  
+       pip install openpyxl
 
 
 ## Offline Use
