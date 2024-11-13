@@ -27,13 +27,12 @@
 
 Add a folder `.cache\whisper` to your project. Move the files **vocab.bpe** and **encoder.json** to this folder. Update file links in your local copy of openai_public.py which will be installed in your python folder e.g. `.venv\Lib\site-packages\tiktoken_ext\openai_public.py` to point to `.cache\whisper`.
             Remove the URL "https://openaipublic.blob.core.windows.net/gpt-2/encodings/main/" and replace it with your local copy, e.g.  
-        ```
+            
         def gpt2():
-        mergeable_ranks = data_gym_to_mergeable_bpe_ranks(
-            vocab_bpe_file="C:/Users/[Username]/whisper_gui/.cache/whisper/vocab.bpe",
-            encoder_json_file="C:/Users/[Username]/whisper_gui/.cache/whisper/encoder.json",
+        mergeable_ranks = data_gym_to_mergeable_bpe_ranks(  
+            vocab_bpe_file="C:/Users/[Username]/whisper_gui/.cache/whisper/vocab.bpe",   
+            encoder_json_file="C:/Users/[Username]/whisper_gui/.cache/whisper/encoder.json",  
         )
-        ```
 
 ### Notes
 
