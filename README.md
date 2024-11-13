@@ -28,6 +28,13 @@
        pip install openpyxl
 
 
+
+### Notes
+
+> As of now (2024/10/19) Whisper works with Python **3.9** or **3.10**. Make sure to select correct version in your IDE (note to self: in VS Code select Python 3.9.0 ('.venv') in lower right corner).
+
+> Its best practice to setup a virtual environment for the project. Make sure to activate it (`.\.venv\Scripts\activate`) before installing libraries!
+
 ## Offline Use
 
 Add a folder `.cache\whisper` to your project. Move the files **vocab.bpe** and **encoder.json** to this folder. Update file links in your local copy of openai_public.py which will be installed in your python folder e.g. `.venv\Lib\site-packages\tiktoken_ext\openai_public.py` to point to `.cache\whisper`.
@@ -38,9 +45,3 @@ Add a folder `.cache\whisper` to your project. Move the files **vocab.bpe** and 
             vocab_bpe_file="C:/Users/[Username]/whisper_gui/.cache/whisper/vocab.bpe",   
             encoder_json_file="C:/Users/[Username]/whisper_gui/.cache/whisper/encoder.json",  
         )
-
-### Notes
-
-> As of now (2024/10/19) Whisper works with Python **3.9** or **3.10**. Make sure to select correct version in your IDE (note to self: in VS Code select Python 3.9.0 ('.venv') in lower right corner).
-
-> Its best practice to setup a virtual environment for the project. Make sure to activate it (`.\.venv\Scripts\activate`) before installing libraries!
