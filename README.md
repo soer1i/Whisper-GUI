@@ -37,7 +37,7 @@ An interface to streamline transcriptions using Whisper.
    
        .venv\Scripts\activate
    
-5. Install the following dependencies (activate .venv !):
+5. Install the following dependencies
    
        pip install git+https://github.com/openai/whisper.git  
        pip install blobfile  
@@ -64,8 +64,8 @@ Add folder `C:\Users\[UserName]\.cache\whisper`. Move the files **vocab.bpe** an
 
 1. run nicegui-pack
 
-       (.venv) ...> nicegui-pack --windowed --name "Whisper Interface" main.py
+       (.venv) ...> nicegui-pack --windowed --name "Whisper GUI" main.py
 
-2. copy the following folders to `.\dist\Whisper Interface\_internal`
+2. copy the following folders to `.\dist\Whisper GUI\_internal`
     - `.\.venv\Lib\site-packages\whisper`
     - `.\.venv\Lib\site-packages\tiktoken_ext`
