@@ -1,5 +1,6 @@
 .venv
 .cache
+.nicegui
 desktop.ini
 [Bb]uild
 dist

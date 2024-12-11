@@ -15,6 +15,7 @@ An interface to streamline transcriptions using Whisper.
 - pywebview
 - openpyxl
 - pydub
+- simpleaudio
 
 ## Developer
 
@@ -47,6 +48,7 @@ An interface to streamline transcriptions using Whisper.
        pip install pywebview
        pip install openpyxl
        pip install pydub
+       pip install simpleaudio
 
 ### Build Executable
 

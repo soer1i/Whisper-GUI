@@ -9,6 +9,7 @@ from pydub import AudioSegment
 import math
 import glob
 import openpyxl
+import simpleaudio
 
 ''' global arguments '''
 audio_segment_max_size = 25000000 # bytes (whisper max: ~25 000 000)
@@ -51,6 +52,9 @@ class ViewModel:
             self.segment_count = 0
             self.segment_done_count = 0
             ui.notify('finished transcribing')
+            if (not app.storage.general['mute']):
+                wave_obj = simpleaudio.WaveObject.from_wave_file(r"sound_effect_finished.wav")
+                wave_obj.play()
         else:
             if self.file_count_old == 0:
                 self.spinner_progress_visibility = True
@@ -93,6 +97,9 @@ class ViewModel:
     def update_select_output_formats(self, e: events.ValueChangeEventArguments):
         self.selected_output_formats = e.value
         self.update_buttons()
+
+    def toggle_mute():
+        app.storage.general['mute'] = not app.storage.general['mute']
 
 viewmodel = ViewModel()
 
@@ -186,7 +193,7 @@ class AudioSplitter:
         return split_files
         
     def get_segment_count(file : str) -> int:
-        """ returns the number of segments the specified file needs to be split, in order for each segment not exceed audio_segment_max_size """
+        """ returns the number of segments the specified file needs to be split, in order for each segment not to exceed audio_segment_max_size """
         file_size = os.path.getsize(file) #size in bytes
         if file_size > audio_segment_max_size:
             return math.ceil(file_size / audio_segment_max_size)
@@ -293,18 +300,36 @@ async def start_transcribing(files, model, language, output_format):
 def main_page():
     """ contains all nicegui elements which make up the interface """
     global viewmodel
-    # initialize ui states in storage.user
+    # initialize ui states in storage.general
     if not 'selected_model' in app.storage.general:
         app.storage.general['selected_model'] = 'tiny'
     if not 'selected_language' in app.storage.general:
         app.storage.general['selected_language'] = 'German'
     if not 'selected_output_format' in app.storage.general:
         app.storage.general['selected_output_format'] = ['xlsx', 'txt']
+    if not 'dark_mode' in app.storage.general:
+        app.storage.general['dark_mode'] = None
+    if not 'mute' in app.storage.general:
+        app.storage.general['mute'] = False
+    dark_mode = ui.dark_mode().bind_value(app.storage.general, 'dark_mode')
     # build page
     with ui.column().classes('w-full'):
-        with ui.row().classes('items-center'):
+        with ui.row().classes('w-full items-center'):
             ui.icon('record_voice_over', color='primary').classes('text-4xl')
             ui.label('Whisper Transcribe').classes('text-primary').style('font-size: 150%')
+            ui.space()
+            with ui.column():
+                ui.button(icon='auto_mode', on_click=dark_mode.disable) \
+                    .props('outline round').tooltip('automatic theme').bind_visibility_from(dark_mode, 'value', lambda mode: mode is None)
+                ui.button(icon='light_mode', on_click=dark_mode.enable) \
+                    .props('outline round').tooltip('light theme').bind_visibility_from(dark_mode, 'value', value=False)
+                ui.button(icon='dark_mode', on_click=dark_mode.auto) \
+                    .props('outline round').tooltip('dark theme').bind_visibility_from(dark_mode, 'value', value=True)
+            with ui.column():
+                ui.button(icon='volume_up', on_click=ViewModel.toggle_mute) \
+                    .props('outline round').tooltip('play sound').bind_visibility_from(app.storage.general, 'mute', value=False)
+                ui.button(icon='volume_off', on_click=ViewModel.toggle_mute) \
+                    .props('outline round').tooltip('mute').bind_visibility_from(app.storage.general, 'mute', value=True)
         ui.button(icon='insert_drive_file', on_click=choose_files).bind_text_from(viewmodel, 'button_file_content').style('margin-top: 8px')
         ui.select(options=models, label='model').classes('w-full').bind_value(app.storage.general, 'selected_model')
         ui.select(options=languages, label='language', with_input=True).classes('w-full').bind_value(app.storage.general, 'selected_language')
@@ -324,4 +349,4 @@ def main_page():
 
 app.on_startup(start_reading_console)
 
-ui.run(title='Whisper Transcribe', reload=False, dark=None, native=True, window_size=[500,800], storage_secret='foobar')
+ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
