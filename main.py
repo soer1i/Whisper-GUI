@@ -52,9 +52,7 @@ class ViewModel:
             self.segment_count = 0
             self.segment_done_count = 0
             ui.notify('finished transcribing')
-            if (not app.storage.general['mute']):
-                wave_obj = simpleaudio.WaveObject.from_wave_file(r"sound_effect_finished.wav")
-                wave_obj.play()
+            ViewModel.play_sound_effect_finished()
         else:
             if self.file_count_old == 0:
                 self.spinner_progress_visibility = True
@@ -100,6 +98,15 @@ class ViewModel:
 
     def toggle_mute():
         app.storage.general['mute'] = not app.storage.general['mute']
+
+    def play_sound_effect_finished():
+        if (not app.storage.general['mute']):
+            sound_effect_path = "sound_effect_finished.wav"
+            if not os.path.isfile(sound_effect_path):
+                sound_effect_path = os.path.join("_internal", "sound_effect_finished.wav")
+            if sound_effect_path is not None:
+                wave_obj = simpleaudio.WaveObject.from_wave_file(sound_effect_path)
+                wave_obj.play()
 
 viewmodel = ViewModel()
 

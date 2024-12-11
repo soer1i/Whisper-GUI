@@ -60,7 +60,8 @@ An interface to streamline transcriptions using Whisper.
 
        (.venv) nicegui-pack --windowed --name "Whisper GUI" main.py
 
-2. copy the following folders to `.\dist\Whisper GUI\_internal`
+2. copy the following files and folders to `.\dist\Whisper GUI\_internal`
+    - `sound_effect_finished.wav`
     - `.\.venv\Lib\site-packages\whisper`
     - `.\.venv\Lib\site-packages\tiktoken_ext`
 
