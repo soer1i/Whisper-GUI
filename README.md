@@ -6,7 +6,7 @@ An interface to streamline transcriptions using Whisper.
 - transcribe audio files of any size  
      *(Audio files larger than 25 MiB are split into segments with an overlap of 2 seconds. Finally the segment transcriptions are merged.)*
 
-![Screenshot of Whisper GUI](/whisper_gui_screenshot.png?raw=true)
+![Screenshot of Whisper GUI](./docs/whisper_gui_screenshot.png?raw=true)
 
 ## Requirements
 
@@ -66,7 +66,7 @@ An interface to streamline transcriptions using Whisper.
 
 ## Whisper Offline Use
 
-Add folder `C:\Users\[UserName]\.cache\whisper`. Move the files **vocab.bpe** and **encoder.json** to this folder. Update your local copy of openai_public.py. If you created a venv this file is located in `.venv\Lib\site-packages\tiktoken_ext\openai_public.py` otherwise it probably is in `C:\Users\[UserName]\AppData\Local\Programs\Python\Python310-32\Lib\site-packagespython3.9\site-packages\tiktoken_ext\openai_public.py`. Remove the URL "https://openaipublic.blob.core.windows.net/gpt-2/encodings/main/" and replace it with your local copy, e.g.:
+Add folder `C:\Users\[UserName]\.cache\whisper`. Move the files **docs/vocab.bpe** and **docs/encoder.json** to this folder. Update your local copy of openai_public.py. If you created a venv this file is located in `.venv\Lib\site-packages\tiktoken_ext\openai_public.py` otherwise it probably is in `C:\Users\[UserName]\AppData\Local\Programs\Python\Python310-32\Lib\site-packagespython3.9\site-packages\tiktoken_ext\openai_public.py`. Remove the URL "https://openaipublic.blob.core.windows.net/gpt-2/encodings/main/" and replace it with your local copy, e.g.:
             
         def gpt2():
         mergeable_ranks = data_gym_to_mergeable_bpe_ranks(  
