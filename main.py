@@ -148,7 +148,7 @@ logger.setLevel("DEBUG")
 async def choose_files():
     """ open a file picker to select multiple files """
     global viewmodel
-    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True)
+    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=["Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)", "All Files (*)"])
     #check whether any files need to be split    
     need_splitting_count = 0
     if viewmodel.selected_files != None:
@@ -216,7 +216,7 @@ class AudioSplitter:
 
     def create_temp_dir() -> str:
         temp_dir = AudioSplitter.get_temp_dir()
-        logger.debug(f'temp dir: {temp_dir}')
+        print(f'\ntemp dir: {temp_dir}')
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
         return temp_dir
@@ -246,8 +246,9 @@ def whisper_transcribe(files: list[str], model_str: str, language_str: str , out
         #     output_writer(results[i], os.path.splitext(file_segments[i][0])[0]+'.'+output_format)
         # combine all segments into one and export it
         if len(results) > 1:
-            for i in range (1, len(results)): # start at second segment
-                # append all text to the first result
+            # append all text to the first result
+            # start at second segment
+            for i in range (1, len(results)):
                 results[0]['text'] += '\n' + results[i]['text']
                 if output_format != ['txt']:
                     # if we want to export more than text, we also need to add all segments to the first result and fix their timestamps
