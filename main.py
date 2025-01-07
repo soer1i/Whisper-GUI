@@ -145,10 +145,12 @@ async def start_reading_console():
 logger = getLogger(__name__)
 logger.setLevel("DEBUG")
 
+filepicker_formats_audio = "Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)"
+filepicker_formats_video = "Video Files (*.webm;*.mkv;*.flv;*.vob;*.ogv;*.ogg;*.drc;*.avi;*.mts;*.m2ts;*.ts;*.mov;*.qt;*.wmv;*.rm;*.rmvb;*.viv;*.asf;*.amv;*.mp4;*.m4p;*.m4v;*.mpg;*.mp2;*.mpeg;*.mpe;*.mpv;*.m2v;*.m4v;*.svi;*.3gp;*.3g2;*.f4v;*.f4p;*.f4a;*.f4b)"
 async def choose_files():
     """ open a file picker to select multiple files """
     global viewmodel
-    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=["Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)", "All Files (*)"])
+    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=[filepicker_formats_audio, filepicker_formats_video, "All Files (*)"])
     #check whether any files need to be split    
     need_splitting_count = 0
     if viewmodel.selected_files != None:
