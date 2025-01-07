@@ -244,20 +244,18 @@ def whisper_transcribe(files: list[str], model_str: str, language_str: str , out
                 viewmodel.update_label_progress()
         # # DEBUGGING: export each segment individually
         # for i in range(len(results)):
-        #     output_writer = whisper.utils.get_writer(output_format, os.path.dirname(os.path.realpath(file_segments[i][0])))
-        #     output_writer(results[i], os.path.splitext(file_segments[i][0])[0]+'.'+output_format)
+        #     whisper_save_result(results[i], ['txt'], os.path.splitext(file_segments[i][0])[0]+'.txt')
         # combine all segments into one and export it
         if len(results) > 1:
             # append all text to the first result
             # start at second segment
             for i in range (1, len(results)):
                 results[0]['text'] += '\n' + results[i]['text']
-                if output_format != ['txt']:
-                    # if we want to export more than text, we also need to add all segments to the first result and fix their timestamps
-                    for segment in results[i]["segments"]:
-                        segment["start"] += file_segments[i][1] / 1000 # ms to s
-                        segment["end"] += file_segments[i][1] / 1000 # ms to s
-                        results[0]['segments'].append(segment)
+                # also add all segments to the first result and fix their timestamps
+                for segment in results[i]["segments"]:
+                    segment["start"] += file_segments[i][1] / 1000 # ms to s
+                    segment["end"] += file_segments[i][1] / 1000 # ms to s
+                    results[0]['segments'].append(segment)
             AudioSplitter.clear_temp_dir()
         whisper_save_result(results[0], output_format, file)
 
