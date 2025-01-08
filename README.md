@@ -36,11 +36,11 @@ An interface to streamline transcriptions using Whisper.
    
        C:\Users\\[UserName]\AppData\Local\Programs\Python\Python39\python.exe -m venv .venv
    
-3. Activate the virtual environment
+2. Activate the virtual environment
    
        .venv\Scripts\activate
    
-5. Install the following dependencies
+3. Install the following dependencies
    
        pip install git+https://github.com/openai/whisper.git  
        pip install blobfile  
@@ -49,6 +49,8 @@ An interface to streamline transcriptions using Whisper.
        pip install openpyxl
        pip install pydub
        pip install simpleaudio
+
+4. To use the GUI on your machine, make sure pre-requisites (mainly NVIDIA CUDA and FFMPEG) are installed. See https://github.com/openai/whisper/discussions/1463 for more info.
 
 ### Build Executable
 
