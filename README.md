@@ -62,6 +62,8 @@ An interface to streamline transcriptions using Whisper.
 
 4. To use the GUI on your machine, make sure pre-requisites (mainly NVIDIA CUDA and FFMPEG) are installed. See https://github.com/openai/whisper/discussions/1463 for more info.
 
+(note to self: Because of an older GPU I had to install pytorch CUDA 12.6)
+
 ### Build Executable
 
 0. first time, install pyinstaller in python environment
