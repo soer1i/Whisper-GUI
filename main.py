@@ -2,6 +2,7 @@ import os
 import sys
 import tqdm
 from nicegui import app, ui, events
+import logging
 import asyncio
 from io import StringIO
 from logging import getLogger, StreamHandler
@@ -28,6 +29,23 @@ languages = [
 output_formats = [
     'xlsx', 'srt', 'txt', 'vtt', 'tsv', 'json'
 ]
+
+class LogElementHandler(logging.Handler):
+    """A logging handler that emits messages to a log element."""
+
+    def __init__(self, element: ui.log, level: int = logging.NOTSET) -> None:
+        self.element = element
+        super().__init__(level)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            self.element.push(msg)
+        except Exception:
+            self.handleError(record)
+
+logger = logging.getLogger()
+
 class ViewModel:
     """ holds all texts and values to be displayed by the ui """
     def __init__(self):
@@ -36,7 +54,6 @@ class ViewModel:
         self.label_progress_content = ''
         self.button_run_enabled = False
         self.spinner_progress_visibility = False
-        self.ui_log = ui.log()
         self.file_count = 0
         self.file_count_old = 0
         self.segment_count = 0
@@ -139,7 +156,7 @@ async def start_reading_console():
     logger.addHandler(stream_handler)
     while 1:
         await asyncio.sleep(1)  # need to update ui
-        viewmodel.ui_log.push(string_io.getvalue()) # Push the log component and reset the buffer
+        logger.info(string_io.getvalue())
         string_io.truncate(0)
 
 logger = getLogger(__name__)
@@ -305,9 +322,10 @@ async def start_transcribing(files, model, language, output_format):
     viewmodel.update_label_progress()
 
 @ui.page('/')
-def main_page():
+def main():
     """ contains all nicegui elements which make up the interface """
     global viewmodel
+
     # initialize ui states in storage.general
     if not 'selected_model' in app.storage.general:
         app.storage.general['selected_model'] = 'tiny'
@@ -353,8 +371,15 @@ def main_page():
                 with ui.row().classes('w-full items-center'):
                     ui.label('console output').style('color: #808080')
                     ui.space()
-            viewmodel.ui_log = ui.log(max_lines=100).classes("w-full h-40").style('white-space: pre-wrap')
+            ui_log = ui.log(max_lines=100).classes("w-full h-40").style('white-space: pre-wrap')
+            handler = LogElementHandler(ui_log)
+            logger.addHandler(handler)
+            ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
+    
+def main():
+    app.on_startup(start_reading_console)
+    ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
 
-app.on_startup(start_reading_console)
+if __name__ == '__main__':
+    main()
 
-ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
