@@ -27,7 +27,7 @@ An interface to streamline transcriptions using Whisper.
 
 | :information_source: Virtual Environment |
 |:-|
-| Its best practice to setup a virtual environment for the project. Make sure to activate it (`.\.venv\Scripts\activate`) before installing libraries! |
+| Its best practice to setup a virtual environment for the project. Make sure to activate it (windows: `.\.venv\Scripts\activate`, ubuntu: `source .venv\bin\activate`) before installing libraries! |
 
 ### Setup Example
 
@@ -38,17 +38,27 @@ An interface to streamline transcriptions using Whisper.
    
 2. Activate the virtual environment
    
-       .venv\Scripts\activate
+       windows: .venv\Scripts\activate
+       ubuntu: source .venv\bin\activate
    
 3. Install the following dependencies
    
        pip install git+https://github.com/openai/whisper.git  
        pip install blobfile  
        pip install nicegui  
-       pip install pywebview
        pip install openpyxl
        pip install pydub
-       pip install simpleaudio
+
+       windows / mac:
+       - pip install simpleaudio
+       ubuntu:
+       - terminal: sudo apt-get install -y python3.9-dev libasound2-dev
+       - venv: pip install simpleaudio
+
+       windows / mac:
+       - pip install pywebview 
+       ubuntu: 
+       - pip install pywebview[qt] (note to self: Had to run `sudo apt install libxcb-cursor0` in terminal for qt to run on ubuntu 24)
 
 4. To use the GUI on your machine, make sure pre-requisites (mainly NVIDIA CUDA and FFMPEG) are installed. See https://github.com/openai/whisper/discussions/1463 for more info.
 
