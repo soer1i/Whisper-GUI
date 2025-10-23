@@ -1,11 +1,11 @@
 import os
 import sys
-import tqdm
 from nicegui import app, ui, events
-import logging
+import whisper
+import logging #import getLogger, StreamHandler
+import tqdm
 import asyncio
 from io import StringIO
-from logging import getLogger, StreamHandler
 from pydub import AudioSegment
 import math
 import glob
@@ -13,6 +13,7 @@ import openpyxl
 import simpleaudio
 from moviepy import VideoFileClip
 import platform # to detect operating system
+
 
 if platform.system() == 'Linux':
     os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
@@ -49,7 +50,38 @@ class LogElementHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
+
+async def start_reading_console():
+    """ start a 'stream' of console outputs """
+    global viewmodel
+    string_io = StringIO() # Create buffer
+    sys.stdout = string_io # Standard output like a print
+    sys.stderr = string_io # Errors/Exceptions
+    stream_handler = StreamHandler(string_io) # Logmessages
+    stream_handler.setLevel("DEBUG")
+    logger.addHandler(stream_handler)
+    while 1:
+        await asyncio.sleep(1)  # need to update ui
+        logger.info(string_io.getvalue())
+        string_io.truncate(0)
+
+class CustomProgressBar(tqdm.tqdm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._current = self.n  # Set the initial value
+        
+    def update(self, n):
+        super().update(n)
+        self._current += n
+        global viewmodel
+        # Inform listeners
+        viewmodel.segment_current_progress = round(self._current / self.total * 100)
+        viewmodel.update_label_progress()
+
+transcribe_module = sys.modules['whisper.transcribe']
+transcribe_module.tqdm.tqdm = CustomProgressBar # inject progressbar into tqdm.tqdm of whisper, so we can see progress
 
 class ViewModel:
     """ holds all texts and values to be displayed by the ui """
@@ -152,41 +184,6 @@ class ViewModel:
                 pass
 
 viewmodel = ViewModel()
-
-class CustomProgressBar(tqdm.tqdm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._current = self.n  # Set the initial value
-        
-    def update(self, n):
-        super().update(n)
-        self._current += n
-        global viewmodel
-        # Inform listeners
-        viewmodel.segment_current_progress = round(self._current / self.total * 100)
-        viewmodel.update_label_progress()
-
-import whisper.transcribe
-transcribe_module = sys.modules['whisper.transcribe']
-transcribe_module.tqdm.tqdm = CustomProgressBar # inject progressbar into tqdm.tqdm of whisper, so we can see progress
-import whisper
-
-async def start_reading_console():
-    """ start a 'stream' of console outputs """
-    global viewmodel
-    string_io = StringIO() # Create buffer
-    sys.stdout = string_io # Standard output like a print
-    sys.stderr = string_io # Errors/Exceptions
-    stream_handler = StreamHandler(string_io) # Logmessages
-    stream_handler.setLevel("DEBUG")
-    logger.addHandler(stream_handler)
-    while 1:
-        await asyncio.sleep(1)  # need to update ui
-        logger.info(string_io.getvalue())
-        string_io.truncate(0)
-
-logger = getLogger(__name__)
-logger.setLevel("DEBUG")
 
 extensions_audio = ('.mp3','.m4a','.m4b','.m4p','.flac','.ogg','.oga','.mogg','.wav','.wma','.mmf','.aa','.aax')
 filepicker_formats_audio = "Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)"
@@ -392,7 +389,7 @@ async def start_transcribing(files, model: str, language: str, output_format, sp
     viewmodel.update_label_progress()
 
 @ui.page('/')
-def main():
+def main_page():
     """ contains all nicegui elements which make up the interface """
     global viewmodel
 
@@ -418,32 +415,56 @@ def main():
             ui.space()
             with ui.column():
                 ui.button(icon='auto_mode', on_click=dark_mode.disable) \
-                    .props('outline round').tooltip('automatic theme').bind_visibility_from(dark_mode, 'value', lambda mode: mode is None)
+                    .props('outline round') \
+                    .tooltip('automatic theme') \
+                    .bind_visibility_from(dark_mode, 'value', lambda mode: mode is None)
                 ui.button(icon='light_mode', on_click=dark_mode.enable) \
-                    .props('outline round').tooltip('light theme').bind_visibility_from(dark_mode, 'value', value=False)
+                    .props('outline round') \
+                    .tooltip('light theme') \
+                    .bind_visibility_from(dark_mode, 'value', value=False)
                 ui.button(icon='dark_mode', on_click=dark_mode.auto) \
-                    .props('outline round').tooltip('dark theme').bind_visibility_from(dark_mode, 'value', value=True)
+                    .props('outline round') \
+                    .tooltip('dark theme') \
+                    .bind_visibility_from(dark_mode, 'value', value=True)
             with ui.column():
                 ui.button(icon='volume_up', on_click=ViewModel.toggle_mute) \
-                    .props('outline round').tooltip('play sound').bind_visibility_from(app.storage.general, 'mute', value=False)
+                    .props('outline round') \
+                    .tooltip('play sound') \
+                    .bind_visibility_from(app.storage.general, 'mute', value=False)
                 ui.button(icon='volume_off', on_click=ViewModel.toggle_mute) \
-                    .props('outline round').tooltip('mute').bind_visibility_from(app.storage.general, 'mute', value=True)
-        ui.button(icon='insert_drive_file', on_click=choose_files).bind_text_from(viewmodel, 'button_file_content').style('margin-top: 8px')
-        ui.switch('speaker detection', value=True).classes('w-full').bind_value(app.storage.general, 'speaker_detection')
-        ui.select(options=models, label='model').classes('w-full').bind_value(app.storage.general, 'selected_model')
-        ui.select(options=languages, label='language', with_input=True).classes('w-full').bind_value(app.storage.general, 'selected_language')
-        ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats).classes('w-full').bind_value(app.storage.general, 'selected_output_format').props('use-chips')
+                    .props('outline round') \
+                    .tooltip('mute') \
+                    .bind_visibility_from(app.storage.general, 'mute', value=True)
+        ui.button(icon='insert_drive_file', on_click=choose_files) \
+            .bind_text_from(viewmodel, 'button_file_content').style('margin-top: 8px')
+        ui.switch('speaker detection', value=True).classes('w-full') \
+            .bind_value(app.storage.general, 'speaker_detection')
+        ui.select(options=models, label='model').classes('w-full') \
+            .bind_value(app.storage.general, 'selected_model')
+        ui.select(options=languages, label='language', with_input=True).classes('w-full') \
+            .bind_value(app.storage.general, 'selected_language')
+        ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats) \
+            .classes('w-full') \
+            .bind_value(app.storage.general, 'selected_output_format').props('use-chips')
         ui.label('Results are saved in the same directory as the original files.').style('color: #808080; font-style: italic; margin-top: 16px')
         with ui.row().classes('w-full'):
-            ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+            ui.button('start', icon='auto_awesome', \
+                on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'], app.storage.general['speaker_detection'])) \
+                .bind_enabled_from(viewmodel, 'button_run_enabled')
             ui.space()
-            ui.button(icon='folder', on_click=lambda: ViewModel.open_directory(viewmodel.directory_last_accessed)) \
-                .props('outline').tooltip('open last used directory').bind_visibility_from(viewmodel, 'directory_last_accessed_visible')
+            ui.button(icon='folder', \
+                on_click=lambda: ViewModel.open_directory(viewmodel.directory_last_accessed)) \
+                .props('outline') \
+                .tooltip('open last used directory') \
+                .bind_visibility_from(viewmodel, 'directory_last_accessed_visible')
         with ui.row().classes('w-full justify-center'):
-            ui.spinner('dots', size='xl').bind_visibility_from(viewmodel, 'spinner_progress_visibility')
-        ui.label().classes('w-full text-center').style('color: #808080; font-style: italic; white-space: pre-wrap').bind_text_from(viewmodel, 'label_progress_content')
+            ui.spinner('dots', size='xl') \
+                .bind_visibility_from(viewmodel, 'spinner_progress_visibility')
+        ui.label().classes('w-full text-center').style('color: #808080; font-style: italic; white-space: pre-wrap') \
+            .bind_text_from(viewmodel, 'label_progress_content')
         with ui.expansion().classes('w-full') as expansion:
-            ui.query('.nicegui-expansion .q-expansion-item__content').style('padding:0', replace='gap:0')
+            ui.query('.nicegui-expansion .q-expansion-item__content') \
+                .style('padding:0', replace='gap:0')
             with expansion.add_slot('header'):
                 with ui.row().classes('w-full items-center'):
                     ui.label('console output').style('color: #808080')
