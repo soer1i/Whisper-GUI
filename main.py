@@ -11,8 +11,11 @@ import math
 import glob
 import openpyxl
 import simpleaudio
+from moviepy import VideoFileClip
+import platform # to detect operating system
 
-os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
+if platform.system() == 'Linux':
+    os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
 
 ''' global arguments '''
 audio_segment_max_size = 25000000 # bytes (whisper max: ~25 000 000)
@@ -62,6 +65,8 @@ class ViewModel:
         self.segment_done_count = 0
         self.segment_current_progress = 0
         self.selected_output_formats = []
+        self.directory_last_accessed = None
+        self.directory_last_accessed_visible = False
             
     def update_label_progress(self):
         if self.file_count <= 0:
@@ -70,11 +75,12 @@ class ViewModel:
             self.segment_current_progress = 0
             self.segment_count = 0
             self.segment_done_count = 0
+            self.directory_last_accessed_visible = True
             ui.notify('finished transcribing')
             ViewModel.play_sound_effect_finished()
         else:
             if self.file_count_old == 0:
-                self.spinner_progress_visibility = True
+                self.spinner_progress_visibility = True            
             info = ''
             if self.file_count == 1:
                 info += f'transcribing {self.file_count} file'
@@ -127,6 +133,23 @@ class ViewModel:
                 wave_obj = simpleaudio.WaveObject.from_wave_file(sound_effect_path)
                 wave_obj.play()
 
+    def open_directory(path: str):
+        """
+        Open Windows Explorer and select the file
+        """
+        if path is not None:
+            if platform.system() == 'Linux':
+                #ubuntu
+                os.system('xdg-open "%s"' % path)            
+            elif platform.system() == 'Windows':
+                #windows
+                os.startfile(path)
+                #subprocess.Popen(f'explorer /select,"{path}"')
+            elif platform.system() == 'Darwin':
+                #mac
+                #todo
+                pass
+
 viewmodel = ViewModel()
 
 class CustomProgressBar(tqdm.tqdm):
@@ -164,12 +187,14 @@ async def start_reading_console():
 logger = getLogger(__name__)
 logger.setLevel("DEBUG")
 
+extensions_audio = ('.mp3','.m4a','.m4b','.m4p','.flac','.ogg','.oga','.mogg','.wav','.wma','.mmf','.aa','.aax')
 filepicker_formats_audio = "Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)"
+extensions_video = ('.webm','.mkv','.flv','.vob','.ogv','.ogg','.drc','.avi','.mts','.m2ts','.ts','.mov','.qt','.wmv','.rm','.rmvb','.viv','.asf','.amv','.mp4','.m4p','.m4v','.mpg','.mp2','.mpeg','.mpe','.mpv','.m2v','.m4v','.svi','.3gp','.3g2','.f4v','.f4p','.f4a','.f4b')
 filepicker_formats_video = "Video Files (*.webm;*.mkv;*.flv;*.vob;*.ogv;*.ogg;*.drc;*.avi;*.mts;*.m2ts;*.ts;*.mov;*.qt;*.wmv;*.rm;*.rmvb;*.viv;*.asf;*.amv;*.mp4;*.m4p;*.m4v;*.mpg;*.mp2;*.mpeg;*.mpe;*.mpv;*.m2v;*.m4v;*.svi;*.3gp;*.3g2;*.f4v;*.f4p;*.f4a;*.f4b)"
 async def choose_files():
     """ open a file picker to select multiple files """
     global viewmodel
-    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=[filepicker_formats_audio, filepicker_formats_video, "All Files (*)"])
+    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=["All Files (*)", filepicker_formats_audio, filepicker_formats_video])
     #check whether any files need to be split    
     need_splitting_count = 0
     if viewmodel.selected_files != None:
@@ -249,11 +274,39 @@ class AudioSplitter:
         for f in files:
             os.remove(f)
 
+class AudioExtractor:
+    def file_is_video(file: str) -> bool:
+        return file.endswith(extensions_video)
+
+    def extract_audio_from_video(file: str) -> str:
+        """
+        returns the file_path of the audio output
+        """
+        # create the filepath of the audiofile
+        output_audio_path = os.path.splitext(file)[0] + '.mp3'
+        try:
+            # Load the video file
+            video = VideoFileClip(file)        
+            # Extract audio
+            audio = video.audio
+            # Save the audio file
+            audio.write_audiofile(output_audio_path)
+        except Exception:
+            print(Exception)
+            print(f'could not extract audio from movie > {file}')
+            return None
+        
+        return output_audio_path
+
 def whisper_transcribe(files: list[str], model_str: str, language_str: str , output_format: list[str]):
     global transcribe_module, viewmodel
     print(f'\nloading model {model_str}, this might take some time ...')
     transcribe_module = whisper.load_model(model_str)
     for file in files:
+        if AudioExtractor.file_is_video(file):
+            audio_file = AudioExtractor.extract_audio_from_video(file)
+            if audio_file is not None:
+                file = audio_file
         file_segments = AudioSplitter.split_audio(file)
         results = []
         if file_segments != None and len(file_segments) > 0:
@@ -307,6 +360,8 @@ def whisper_save_result(result, output_ext: list[str], file_path: str):
 async def start_transcribing(files, model: str, language: str, output_format, speaker_detection: str):
     global viewmodel
     viewmodel.file_count += len(files)
+    if files is not None and len(files) > 0:
+        viewmodel.directory_last_accessed = os.path.dirname(os.path.abspath(files[-1]))
     viewmodel.selected_files = None
     viewmodel.update_buttons()
     # get total number of segments that will be processed
@@ -366,7 +421,11 @@ def main():
         ui.select(options=languages, label='language', with_input=True).classes('w-full').bind_value(app.storage.general, 'selected_language')
         ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats).classes('w-full').bind_value(app.storage.general, 'selected_output_format').props('use-chips')
         ui.label('Results are saved in the same directory as the original files.').style('color: #808080; font-style: italic; margin-top: 16px')
-        ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'], app.storage.general['speaker_detection'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+        with ui.row().classes('w-full'):
+            ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+            ui.space()
+            ui.button(icon='folder', on_click=lambda: ViewModel.open_directory(viewmodel.directory_last_accessed)) \
+                .props('outline').tooltip('open last used directory').bind_visibility_from(viewmodel, 'directory_last_accessed_visible')
         with ui.row().classes('w-full justify-center'):
             ui.spinner('dots', size='xl').bind_visibility_from(viewmodel, 'spinner_progress_visibility')
         ui.label().classes('w-full text-center').style('color: #808080; font-style: italic; white-space: pre-wrap').bind_text_from(viewmodel, 'label_progress_content')
@@ -382,7 +441,7 @@ def main():
             ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
     
 def main():
-    # app.on_startup(start_reading_console)
+    app.on_startup(start_reading_console)
     ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
 
 if __name__ == '__main__':

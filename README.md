@@ -2,9 +2,10 @@
 
 An interface to streamline transcriptions using Whisper.  
 
-- transcribe video files up to ~ 25 MiB
-- transcribe audio files of any size  
+- transcribe audio files
      *(Audio files larger than 25 MiB are split into segments with an overlap of 2 seconds. Finally the segment transcriptions are merged.)*
+- transcribe video files
+     *(Audio is extracted and saved to the directory of the video file.)*
 
 ![Screenshot of Whisper GUI](./docs/whisper_gui_screenshot.png?raw=true)
 
