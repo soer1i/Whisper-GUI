@@ -55,7 +55,7 @@ class ViewModel:
     """ holds all texts and values to be displayed by the ui """
     def __init__(self):
         self.button_file_content = 'choose audio files'
-        self.selected_files = None
+        self.selected_files = None # tuple(str)
         self.label_progress_content = ''
         self.button_run_enabled = False
         self.spinner_progress_visibility = False
@@ -144,10 +144,11 @@ class ViewModel:
             elif platform.system() == 'Windows':
                 #windows
                 os.startfile(path)
+                #todo: test
                 #subprocess.Popen(f'explorer /select,"{path}"')
             elif platform.system() == 'Darwin':
                 #mac
-                #todo
+                #todo: implement / test
                 pass
 
 viewmodel = ViewModel()
@@ -195,9 +196,19 @@ async def choose_files():
     """ open a file picker to select multiple files """
     global viewmodel
     viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=["All Files (*)", filepicker_formats_audio, filepicker_formats_video])
-    #check whether any files need to be split    
-    need_splitting_count = 0
     if viewmodel.selected_files != None:
+        #remove all files from selection that are not audio or video
+        old_file_count = len(viewmodel.selected_files)
+        viewmodel.selected_files = [x for x in viewmodel.selected_files if (x.endswith(extensions_audio) or x.endswith(extensions_video))]
+        removed_file_count = old_file_count - len(viewmodel.selected_files)
+        if removed_file_count > 0:
+            if removed_file_count == 1:
+                ui.notify('selected file is not audio or video')
+            else:    
+                ui.notify(f'{removed_file_count} files are not audio or video')
+
+        #check whether any files need to be split    
+        need_splitting_count = 0
         for file in viewmodel.selected_files:
             file_size = os.path.getsize(file) #size in bytes
             if file_size > audio_segment_max_size:
@@ -209,6 +220,8 @@ async def choose_files():
                 ui.notify('1 file is too large and needs to be split')
             else:    
                 ui.notify(f'{need_splitting_count} files are too large and need to be split')
+            
+
     viewmodel.update_buttons()
 
 class AudioSplitter:
