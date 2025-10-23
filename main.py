@@ -12,8 +12,10 @@ import glob
 import openpyxl
 import simpleaudio
 from moviepy import VideoFileClip
+import platform # to detect operating system
 
-os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
+if platform.system() == 'Linux':
+    os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
 
 ''' global arguments '''
 audio_segment_max_size = 25000000 # bytes (whisper max: ~25 000 000)
@@ -63,6 +65,8 @@ class ViewModel:
         self.segment_done_count = 0
         self.segment_current_progress = 0
         self.selected_output_formats = []
+        self.directory_last_accessed = None
+        self.directory_last_accessed_visible = False
             
     def update_label_progress(self):
         if self.file_count <= 0:
@@ -71,11 +75,12 @@ class ViewModel:
             self.segment_current_progress = 0
             self.segment_count = 0
             self.segment_done_count = 0
+            self.directory_last_accessed_visible = True
             ui.notify('finished transcribing')
             ViewModel.play_sound_effect_finished()
         else:
             if self.file_count_old == 0:
-                self.spinner_progress_visibility = True
+                self.spinner_progress_visibility = True            
             info = ''
             if self.file_count == 1:
                 info += f'transcribing {self.file_count} file'
@@ -127,6 +132,23 @@ class ViewModel:
             if sound_effect_path is not None:
                 wave_obj = simpleaudio.WaveObject.from_wave_file(sound_effect_path)
                 wave_obj.play()
+
+    def open_directory(path: str):
+        """
+        Open Windows Explorer and select the file
+        """
+        if path is not None:
+            if platform.system() == 'Linux':
+                #ubuntu
+                os.system('xdg-open "%s"' % path)            
+            elif platform.system() == 'Windows':
+                #windows
+                os.startfile(path)
+                #subprocess.Popen(f'explorer /select,"{path}"')
+            elif platform.system() == 'Darwin':
+                #mac
+                #todo
+                pass
 
 viewmodel = ViewModel()
 
@@ -338,6 +360,8 @@ def whisper_save_result(result, output_ext: list[str], file_path: str):
 async def start_transcribing(files, model, language, output_format):
     global viewmodel
     viewmodel.file_count += len(files)
+    if files is not None and len(files) > 0:
+        viewmodel.directory_last_accessed = os.path.dirname(os.path.abspath(files[-1]))
     viewmodel.selected_files = None
     viewmodel.update_buttons()
     # get total number of segments that will be processed
@@ -394,7 +418,11 @@ def main():
         ui.select(options=languages, label='language', with_input=True).classes('w-full').bind_value(app.storage.general, 'selected_language')
         ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats).classes('w-full').bind_value(app.storage.general, 'selected_output_format').props('use-chips')
         ui.label('Results are saved in the same directory as the original files.').style('color: #808080; font-style: italic; margin-top: 16px')
-        ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+        with ui.row().classes('w-full'):
+            ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+            ui.space()
+            ui.button(icon='folder', on_click=lambda: ViewModel.open_directory(viewmodel.directory_last_accessed)) \
+                .props('outline').tooltip('open last used directory').bind_visibility_from(viewmodel, 'directory_last_accessed_visible')
         with ui.row().classes('w-full justify-center'):
             ui.spinner('dots', size='xl').bind_visibility_from(viewmodel, 'spinner_progress_visibility')
         ui.label().classes('w-full text-center').style('color: #808080; font-style: italic; white-space: pre-wrap').bind_text_from(viewmodel, 'label_progress_content')
