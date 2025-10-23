@@ -304,7 +304,7 @@ def whisper_save_result(result, output_ext: list[str], file_path: str):
             output_writer = whisper.utils.get_writer(ext, output_dir)
             output_writer(result, output_filename)
 
-async def start_transcribing(files, model, language, output_format):
+async def start_transcribing(files, model: str, language: str, output_format, speaker_detection: str):
     global viewmodel
     viewmodel.file_count += len(files)
     viewmodel.selected_files = None
@@ -329,6 +329,8 @@ def main():
     global viewmodel
 
     # initialize ui states in storage.general
+    if not 'speaker_detection' in app.storage.general:
+        app.storage.general['speaker_detection'] = True
     if not 'selected_model' in app.storage.general:
         app.storage.general['selected_model'] = 'tiny'
     if not 'selected_language' in app.storage.general:
@@ -359,11 +361,12 @@ def main():
                 ui.button(icon='volume_off', on_click=ViewModel.toggle_mute) \
                     .props('outline round').tooltip('mute').bind_visibility_from(app.storage.general, 'mute', value=True)
         ui.button(icon='insert_drive_file', on_click=choose_files).bind_text_from(viewmodel, 'button_file_content').style('margin-top: 8px')
+        ui.switch('speaker detection', value=True).classes('w-full').bind_value(app.storage.general, 'speaker_detection')
         ui.select(options=models, label='model').classes('w-full').bind_value(app.storage.general, 'selected_model')
         ui.select(options=languages, label='language', with_input=True).classes('w-full').bind_value(app.storage.general, 'selected_language')
         ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats).classes('w-full').bind_value(app.storage.general, 'selected_output_format').props('use-chips')
         ui.label('Results are saved in the same directory as the original files.').style('color: #808080; font-style: italic; margin-top: 16px')
-        ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+        ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'], app.storage.general['speaker_detection'])).bind_enabled_from(viewmodel, 'button_run_enabled')
         with ui.row().classes('w-full justify-center'):
             ui.spinner('dots', size='xl').bind_visibility_from(viewmodel, 'spinner_progress_visibility')
         ui.label().classes('w-full text-center').style('color: #808080; font-style: italic; white-space: pre-wrap').bind_text_from(viewmodel, 'label_progress_content')
@@ -379,7 +382,7 @@ def main():
             ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
     
 def main():
-    app.on_startup(start_reading_console)
+    # app.on_startup(start_reading_console)
     ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
 
 if __name__ == '__main__':
