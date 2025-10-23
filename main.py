@@ -11,6 +11,9 @@ import math
 import glob
 import openpyxl
 import simpleaudio
+from moviepy import VideoFileClip
+
+os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
 
 ''' global arguments '''
 audio_segment_max_size = 25000000 # bytes (whisper max: ~25 000 000)
@@ -162,12 +165,14 @@ async def start_reading_console():
 logger = getLogger(__name__)
 logger.setLevel("DEBUG")
 
+extensions_audio = ('.mp3','.m4a','.m4b','.m4p','.flac','.ogg','.oga','.mogg','.wav','.wma','.mmf','.aa','.aax')
 filepicker_formats_audio = "Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)"
+extensions_video = ('.webm','.mkv','.flv','.vob','.ogv','.ogg','.drc','.avi','.mts','.m2ts','.ts','.mov','.qt','.wmv','.rm','.rmvb','.viv','.asf','.amv','.mp4','.m4p','.m4v','.mpg','.mp2','.mpeg','.mpe','.mpv','.m2v','.m4v','.svi','.3gp','.3g2','.f4v','.f4p','.f4a','.f4b')
 filepicker_formats_video = "Video Files (*.webm;*.mkv;*.flv;*.vob;*.ogv;*.ogg;*.drc;*.avi;*.mts;*.m2ts;*.ts;*.mov;*.qt;*.wmv;*.rm;*.rmvb;*.viv;*.asf;*.amv;*.mp4;*.m4p;*.m4v;*.mpg;*.mp2;*.mpeg;*.mpe;*.mpv;*.m2v;*.m4v;*.svi;*.3gp;*.3g2;*.f4v;*.f4p;*.f4a;*.f4b)"
 async def choose_files():
     """ open a file picker to select multiple files """
     global viewmodel
-    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=[filepicker_formats_audio, filepicker_formats_video, "All Files (*)"])
+    viewmodel.selected_files = await app.native.main_window.create_file_dialog(allow_multiple=True, file_types=["All Files (*)", filepicker_formats_audio, filepicker_formats_video])
     #check whether any files need to be split    
     need_splitting_count = 0
     if viewmodel.selected_files != None:
@@ -247,11 +252,39 @@ class AudioSplitter:
         for f in files:
             os.remove(f)
 
+class AudioExtractor:
+    def file_is_video(file: str) -> bool:
+        return file.endswith(extensions_video)
+
+    def extract_audio_from_video(file: str) -> str:
+        """
+        returns the file_path of the audio output
+        """
+        # create the filepath of the audiofile
+        output_audio_path = os.path.splitext(file)[0] + '.mp3'
+        try:
+            # Load the video file
+            video = VideoFileClip(file)        
+            # Extract audio
+            audio = video.audio
+            # Save the audio file
+            audio.write_audiofile(output_audio_path)
+        except Exception:
+            print(Exception)
+            print(f'could not extract audio from movie > {file}')
+            return None
+        
+        return output_audio_path
+
 def whisper_transcribe(files: list[str], model_str: str, language_str: str , output_format: list[str]):
     global transcribe_module, viewmodel
     print(f'\nloading model {model_str}, this might take some time ...')
     transcribe_module = whisper.load_model(model_str)
     for file in files:
+        if AudioExtractor.file_is_video(file):
+            audio_file = AudioExtractor.extract_audio_from_video(file)
+            if audio_file is not None:
+                file = audio_file
         file_segments = AudioSplitter.split_audio(file)
         results = []
         if file_segments != None and len(file_segments) > 0:
