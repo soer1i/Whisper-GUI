@@ -49,6 +49,7 @@ An interface to streamline transcriptions using Whisper.
        pip install pywebview
        pip install openpyxl
        pip install pydub
+       pip install moviepy
        pip install simpleaudio
 
 4. To use the GUI on your machine, make sure pre-requisites (mainly NVIDIA CUDA and FFMPEG) are installed. See https://github.com/openai/whisper/discussions/1463 for more info.
