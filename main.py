@@ -367,26 +367,104 @@ def whisper_save_result(result, output_ext: list[str], file_path: str):
             output_writer = whisper.utils.get_writer(ext, output_dir)
             output_writer(result, output_filename)
 
-async def start_transcribing(files, model: str, language: str, output_format, speaker_detection: str):
+# async def start_transcribing(files, model: str, language: str, output_format, speaker_detection: bool):
+#     global viewmodel
+#     viewmodel.file_count += len(files)
+#     if files is not None and len(files) > 0:
+#         viewmodel.directory_last_accessed = os.path.dirname(os.path.abspath(files[-1]))
+#     viewmodel.selected_files = None
+#     viewmodel.update_buttons()
+#     # get total number of segments that will be processed
+#     segcount = 0
+#     for file in files:
+#         segcount += AudioSplitter.get_segment_count(file)
+#     viewmodel.segment_count += segcount
+#     viewmodel.update_label_progress()
+#     # start transcribing
+#     loop = asyncio.get_event_loop()
+#     await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format))
+#     # update labels after transcribing ends
+#     viewmodel.file_count -= len(files)
+#     viewmodel.segment_count -= segcount
+#     viewmodel.update_label_progress()
+
+async def start_transcribing(files, model: str, language: str, output_format, speaker_detection: bool):
     global viewmodel
     viewmodel.file_count += len(files)
     if files is not None and len(files) > 0:
         viewmodel.directory_last_accessed = os.path.dirname(os.path.abspath(files[-1]))
     viewmodel.selected_files = None
     viewmodel.update_buttons()
-    # get total number of segments that will be processed
-    segcount = 0
-    for file in files:
-        segcount += AudioSplitter.get_segment_count(file)
-    viewmodel.segment_count += segcount
-    viewmodel.update_label_progress()
     # start transcribing
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format))
+    await loop.run_in_executor(None, lambda: whisper_speaker_detection(files, model, ViewModel.get_output_language(language), output_format))
     # update labels after transcribing ends
     viewmodel.file_count -= len(files)
-    viewmodel.segment_count -= segcount
     viewmodel.update_label_progress()
+
+
+from pyannote.audio import Pipeline
+import re
+import torch
+class SpeakerDiarization:
+    spacermilli = 1
+
+    def millisec(timeStr):
+        spl = timeStr.split(":")
+        s = (int)((int(spl[0]) * 60 * 60 + int(spl[1]) * 60 + float(spl[2]) )* 1000)
+        return s
+
+    def get_speaker_diarization(file: str):        
+        pipeline = Pipeline.from_pretrained('pyannote_models/pyannote_diarization_config.yaml')
+        dz = pipeline(file)
+        
+        dzList = []
+        for l in str(dz).splitlines():
+            start, end =  tuple(re.findall('[0-9]+:[0-9]+:[0-9]+\.[0-9]+', string=l))
+            start = SpeakerDiarization.millisec(start) - SpeakerDiarization.spacermilli
+            end = SpeakerDiarization.millisec(end) - SpeakerDiarization.spacermilli
+            lex = not re.findall('SPEAKER_01', string=l)
+            dzList.append([start, end, lex])
+
+        print(*dzList[:10], sep='\n')
+
+def whisper_speaker_detection(files: list[str], model_str: str, language_str: str , output_format: list[str]):
+    """
+    todo
+    """
+    global transcribe_module, viewmodel
+    for file in files:
+        if AudioExtractor.file_is_video(file):
+            audio_file = AudioExtractor.extract_audio_from_video(file)
+            if audio_file is not None:
+                file = audio_file
+        SpeakerDiarization.get_speaker_diarization(file)
+
+    print(f'\nloading model {model_str}, this might take some time ...')
+    transcribe_module = whisper.load_model(model_str)
+        # file_segments = AudioSplitter.split_audio(file)
+        # results = []
+        # if file_segments != None and len(file_segments) > 0:
+        #     for i in range (len(file_segments)):
+        #         results.append(transcribe_module.transcribe(file_segments[i][0], language=language_str, verbose=True, fp16=False))
+        #         viewmodel.segment_done_count += 1
+        #         viewmodel.update_label_progress()
+        # # # DEBUGGING: export each segment individually
+        # # for i in range(len(results)):
+        # #     whisper_save_result(results[i], ['txt'], os.path.splitext(file_segments[i][0])[0]+'.txt')
+        # # combine all segments into one and export it
+        # if len(results) > 1:
+        #     # append all text to the first result
+        #     # start at second segment
+        #     for i in range (1, len(results)):
+        #         results[0]['text'] += '\n' + results[i]['text']
+        #         # also add all segments to the first result and fix their timestamps
+        #         for segment in results[i]["segments"]:
+        #             segment["start"] += file_segments[i][1] / 1000 # ms to s
+        #             segment["end"] += file_segments[i][1] / 1000 # ms to s
+        #             results[0]['segments'].append(segment)
+        #     AudioSplitter.clear_temp_dir()
+        # whisper_save_result(results[0], output_format, file)
 
 @ui.page('/')
 def main_page():
@@ -475,7 +553,7 @@ def main_page():
             ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
     
 def main():
-    app.on_startup(start_reading_console)
+    # app.on_startup(start_reading_console)
     ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
 
 if __name__ == '__main__':

@@ -89,3 +89,21 @@ Add folder `C:\Users\[UserName]\.cache\whisper`. Move the files **docs/vocab.bpe
             vocab_bpe_file="C:/Users/[Username]/.cache/whisper/vocab.bpe",   
             encoder_json_file="C:/Users/[Username]/.cache/whisper/encoder.json",  
         )
+        
+## Pyannote Offline Use
+
+My attempts to get pyannote.audio run offline where quite frustrating. It might be that it is easier to do so on newer systems. Following are some notes that might help others.
+
+### Ubuntu
+
+1. Make sure to install git lfs.  
+2. Get pyannot offline model from huggingface (eg. model: *speaker-diarization-community-1*).
+3. Move *model.bin* files and *config.yaml* to project. Make sure to rename everything in *config.yaml* accordingly. The model links in the yaml file are relative to the project environment.
+4. Install numpy in python environment.
+5. Install pytorch in python environment. Either install the CPU version, or make sure it matches the cuda version installed on the system.
+       - check installed cuda version. terminal: `nvcc --version`
+       - check which version to install https://pytorch.org/get-started/previous-versions/
+       - in my case I installed `pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu`
+6. Install pyannote.audio in python environment.
+       - make sure to install it with the same version as pytorch
+       - in my case I installed `pip install pyannote.audio --extra-index-url https://download.pytorch.org/whl/cpu`
