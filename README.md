@@ -65,6 +65,24 @@ An interface to streamline transcriptions using Whisper.
 
 (note to self: Because of an older GPU I had to install pytorch CUDA 12.6)
 
+### Speaker Diarization Setup (Mac)
+
+1. Install pyannote.audio in venv
+       (.venv) pip install pyannote.audio
+
+2. Make sure git-lfs is installed (https://git-lfs.com)
+       (terminal) brew install git-lfs
+
+3. Create a directory for the diarization model on disk
+       mkdir .cache/models
+
+4. Download the diarization model from huggingface. When prompted for a password, use an access token with write permissions. Make sure to accept pyannotes conditions on huggingface before downloading.
+       git clone https://hf.co/pyannote/speaker-diarization-community-1 .cache/models/pyannote-speaker-diarization-community-1
+
+5. Make sure ffmpeg version ins compatible with torch. I had to install version 7:
+       brew uninstall ffmpeg
+       brew install ffmpeg@7
+       
 ### Build Executable
 
 0. first time, install pyinstaller in python environment

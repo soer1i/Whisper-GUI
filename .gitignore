@@ -1,6 +1,7 @@
 .venv
 .cache
 .nicegui
+.DS_Store
 desktop.ini
 [Bb]uild
 dist

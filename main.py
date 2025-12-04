@@ -405,7 +405,7 @@ async def start_transcribing(files, model: str, language: str, output_format, sp
 
 from pyannote.audio import Pipeline
 import re
-import torch
+# import torch
 class SpeakerDiarization:
     spacermilli = 1
 
@@ -552,9 +552,17 @@ def main_page():
             logger.addHandler(handler)
             ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
     
+
+import torchaudio
+from pyannote.audio import Pipeline
+
 def main():
     # app.on_startup(start_reading_console)
-    ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
+    # ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
+
+    pipe = Pipeline.from_pretrained('/Users/soerli/Documents/repos/Whisper-GUI/.cache/models/pyannote-speaker-diarization-community-1')
+    waveform, sr = torchaudio.load("/Users/soerli/Documents/repos/Whisper-GUI/.cache/samples test/sample-0.mp3") # Preload -> bypass TorchCodec
+    out = pipe({"waveform": waveform, "sample_rate": sr})
 
 if __name__ == '__main__':
     main()
