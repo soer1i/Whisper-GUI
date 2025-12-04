@@ -167,12 +167,12 @@ class ViewModel:
 
     def open_directory(path: str):
         """
-        Open Windows Explorer and select the file
+        open specified directory in explorer / finder
         """
         if path is not None:
             if platform.system() == 'Linux':
                 #ubuntu
-                os.system('xdg-open "%s"' % path)            
+                os.system('xdg-open "%s"' % path) #todo: test with whitespace in directory
             elif platform.system() == 'Windows':
                 #windows
                 os.startfile(path)
@@ -180,7 +180,7 @@ class ViewModel:
                 #subprocess.Popen(f'explorer /select,"{path}"')
             elif platform.system() == 'Darwin':
                 #mac
-                #todo: implement / test
+                os.system(f"open \'{path}\'")
                 pass
 
 viewmodel = ViewModel()

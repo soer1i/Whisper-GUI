@@ -49,6 +49,7 @@ An interface to streamline transcriptions using Whisper.
        pip install nicegui  
        pip install openpyxl
        pip install pydub
+       pip install moviepy
 
        windows / mac:
        - pip install simpleaudio
