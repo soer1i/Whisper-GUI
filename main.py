@@ -170,17 +170,19 @@ import whisper
 
 async def start_reading_console():
     """ start a 'stream' of console outputs """
-    global viewmodel
     string_io = StringIO() # Create buffer
     sys.stdout = string_io # Standard output like a print
     sys.stderr = string_io # Errors/Exceptions
     stream_handler = StreamHandler(string_io) # Logmessages
     stream_handler.setLevel("DEBUG")
     logger.addHandler(stream_handler)
-    while 1:
-        await asyncio.sleep(1)  # need to update ui
-        logger.info(string_io.getvalue())
-        string_io.truncate(0)
+    try:
+        while 1:
+            await asyncio.sleep(1)  # need to update ui
+            logger.info(string_io.getvalue())
+            string_io.truncate(0)
+    except Exception:
+        logging.exception('Error')
 
 logger = getLogger(__name__)
 logger.setLevel("DEBUG")
@@ -343,8 +345,9 @@ class PrepareAudio:
                     'vn': None,   # disables video
                 }
             ).run(overwrite_output=True)
-            
+
             return output_audio_path
+        
         except ffmpeg.Error as e:
             print(f"Compression failed: {e}")
             return None
@@ -434,8 +437,11 @@ def main():
         viewmodel.update_label_progress()
        
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format, setting_large_file))
-    
+        try:
+            await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format, setting_large_file))
+        except Exception:
+            logging.exception('Error')
+
         # update labels after transcribing ends
         viewmodel.file_count -= len(files)
         viewmodel.segment_count -= segcount
@@ -512,7 +518,7 @@ def main():
             ui_log = ui.log(max_lines=100).classes("w-full h-40").style('white-space: pre-wrap')
             handler = LogElementHandler(ui_log)
             logger.addHandler(handler)
-            ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
+            ui.context.client.on_disconnect(lambda: logger.handlers.clear())
     
 def main():
     app.on_startup(start_reading_console)
