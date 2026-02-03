@@ -1,8 +1,10 @@
 .venv
 .cache
+.temp
 .nicegui
 .DS_Store
 desktop.ini
 [Bb]uild
 dist
 launch.json
+main_test.py

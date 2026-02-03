@@ -1,7 +1,7 @@
 import os
 import sys
 import tqdm
-from nicegui import app, ui, run, events
+from nicegui import app, ui, events
 import logging
 import asyncio
 from io import StringIO
@@ -213,10 +213,13 @@ async def choose_files():
                 if need_splitting_count > 1:
                     break
         if need_splitting_count > 0:
+            file_operation = 'split'
+            if app.storage.general['setting_large_files'] == 'compress':
+                file_operation = 'compressed'
             if need_splitting_count == 1:
-                ui.notify('1 file is too large and needs to be split')
+                ui.notify(f'1 file is too large and will be {file_operation}')
             else:    
-                ui.notify(f'{need_splitting_count} files are too large and need to be split')
+                ui.notify(f'{need_splitting_count} files are too large and will be {file_operation}')
             
 
     viewmodel.update_buttons()
@@ -315,7 +318,7 @@ class PrepareAudio:
         # create the filepath of the audiofile
         output_audio_path = os.path.splitext(file)[0] + '.mp3'
         try:
-            ffmpeg.input(file).audio.output(output_audio_path,acodec='libmp3lame').run()
+            ffmpeg.input(file).audio.output(output_audio_path,acodec='libmp3lame').run(overwrite_output=True)
 
         except Exception:
             print(Exception)
@@ -339,7 +342,7 @@ class PrepareAudio:
                     'map_metadata': '-1',
                     'vn': None,   # disables video
                 }
-            ).run()
+            ).run(overwrite_output=True)
             
             return output_audio_path
         except ffmpeg.Error as e:
@@ -372,6 +375,7 @@ def whisper_transcribe(files: list[str], model_str: str, language_str: str , out
                     segment["start"] += file_segments[i][1] / 1000 # ms to s
                     segment["end"] += file_segments[i][1] / 1000 # ms to s
                     results[0]['segments'].append(segment)
+            file = os.path.splitext(file)[0] + '_split' + os.path.splitext(file)[1]
             PrepareAudio.clear_temp_dir()
         whisper_save_result(results[0], output_format, file)
     return True
@@ -402,35 +406,40 @@ def whisper_save_result(result, output_ext: list[str], file_path: str):
             output_writer = whisper.utils.get_writer(ext, output_dir)
             output_writer(result, output_filename)
 
-async def start_transcribing(files, model, language, output_format, setting_large_file):
-    global viewmodel
-    viewmodel.file_count += len(files)
-    if files is not None and len(files) > 0:
-        viewmodel.directory_last_accessed = os.path.dirname(os.path.abspath(files[-1]))
-    viewmodel.selected_files = None
-    viewmodel.update_buttons()
-    # get total number of segments that will be processed
-    segcount = 0
-    for file in files:
-        segcount += PrepareAudio.get_segment_count(file)
-    viewmodel.segment_count += segcount
-    viewmodel.update_label_progress()
-    # start transcribing OLD
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format, setting_large_file))
-    
-    # #start transcribing NEW
-    # await run.cpu_bound(whisper_transcribe, files, model, ViewModel.get_output_language(language), output_format)
-    
-    # update labels after transcribing ends
-    viewmodel.file_count -= len(files)
-    viewmodel.segment_count -= segcount
-    viewmodel.update_label_progress()
-
 @ui.page('/')
 def main():
     """ contains all nicegui elements which make up the interface """
     global viewmodel
+
+    async def start_transcribing():
+        files = viewmodel.selected_files
+        model = app.storage.general['selected_model']
+        language = app.storage.general['selected_language']
+        output_format = app.storage.general['selected_output_format']
+        setting_large_file = app.storage.general['setting_large_files']
+
+        viewmodel.file_count += len(files)
+        if files is not None and len(files) > 0:
+            viewmodel.directory_last_accessed = os.path.dirname(os.path.abspath(files[-1]))
+        viewmodel.selected_files = None
+        viewmodel.update_buttons()
+        # get total number of segments that will be processed
+        segcount = 0
+        if setting_large_file == 'split':
+            for file in files:
+                segcount += PrepareAudio.get_segment_count(file)
+        else:
+            segcount = 1
+        viewmodel.segment_count += segcount
+        viewmodel.update_label_progress()
+       
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format, setting_large_file))
+    
+        # update labels after transcribing ends
+        viewmodel.file_count -= len(files)
+        viewmodel.segment_count -= segcount
+        viewmodel.update_label_progress()
 
     # initialize ui states in storage.general
     if not 'selected_model' in app.storage.general:
@@ -488,7 +497,7 @@ def main():
         ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats).classes('w-full').bind_value(app.storage.general, 'selected_output_format').props('use-chips')
         ui.label('Results are saved in the same directory as the original files.').style('color: #808080; font-style: italic; margin-top: 16px')
         with ui.row().classes('w-full'):
-            ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'], app.storage.general['setting_large_files'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+            ui.button('start', icon='auto_awesome', on_click=start_transcribing).bind_enabled_from(viewmodel, 'button_run_enabled')
             ui.space()
             ui.button(icon='folder', on_click=lambda: ViewModel.open_directory(viewmodel.directory_last_accessed)) \
                 .props('outline').tooltip('open last used directory').bind_visibility_from(viewmodel, 'directory_last_accessed_visible')
@@ -502,14 +511,13 @@ def main():
                     ui.label('console output').style('color: #808080')
                     ui.space()
             ui_log = ui.log(max_lines=100).classes("w-full h-40").style('white-space: pre-wrap')
-            # handler = LogElementHandler(ui_log)
-            # logger.addHandler(handler)
-            # ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
+            handler = LogElementHandler(ui_log)
+            logger.addHandler(handler)
+            ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
     
 def main():
-    # app.on_startup(start_reading_console)
+    app.on_startup(start_reading_console)
     ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
 
 if __name__ == '__main__':
     main()
-    
