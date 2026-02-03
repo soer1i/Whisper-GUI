@@ -449,9 +449,9 @@ def main():
     if not 'selected_output_format' in app.storage.general:
         app.storage.general['selected_output_format'] = ['xlsx', 'txt']
     if not 'setting_theme' in app.storage.general:
-        app.storage.general['setting_theme'] = 'auto'
+        app.storage.general['setting_theme'] = 'auto_mode'
     if not 'setting_sound' in app.storage.general:
-        app.storage.general['setting_sound'] = 'play sound'
+        app.storage.general['setting_sound'] = 'volume_up'
     if not 'setting_large_files' in app.storage.general:
         app.storage.general['setting_large_files'] = 'compress'
         
@@ -464,33 +464,31 @@ def main():
             ui.label('Whisper Transcribe').classes('text-primary').style('font-size: 150%')
             ui.space()
             with ui.button(icon='menu').props('outline'):
-                with ui.menu().props('auto-close'):
-                    with ui.menu_item():
+                with ui.menu():
+                    with ui.menu_item(auto_close=False):
                         with ui.item_section().props('avatar'):
-                            ui.icon(name='auto_mode')
-                            # ui.icon(name='light_mode').bind_visibility_from(dark_mode, 'value', value=False)
-                            # ui.icon(name='dark_mode').bind_visibility_from(dark_mode, 'value', value=True)
+                            ui.icon(name='auto_mode').bind_name_from(app.storage.general, 'setting_theme')
                         with ui.item_section():
                             ui.item_section('Theme')
                         with ui.item_section().props('side'):
-                            ui.toggle(['auto', 'light', 'dark'],\
-                                       on_change=lambda e: dark_theme.disable() if str(e.value) == 'light' else (dark_theme.enable() if str(e.value) == 'dark' else dark_theme.auto())).bind_value(app.storage.general, 'setting_theme')
+                            ui.toggle({'auto_mode': 'auto', 'light_mode': 'light', 'dark_mode': 'dark'},\
+                                       on_change=lambda e: dark_theme.disable() if str(e.value) == 'light_mode' else (dark_theme.enable() if str(e.value) == 'dark_mode' else dark_theme.auto())).bind_value(app.storage.general, 'setting_theme')
          
-                    with ui.menu_item():
+                    with ui.menu_item(auto_close=False):
                         with ui.item_section().props('avatar'):
-                            ui.icon(name='volume_up')
+                            ui.icon(name='volume_up').bind_name_from(app.storage.general, 'setting_sound')
                         with ui.item_section():
                             ui.item_section('Sound')
                         with ui.item_section().props('side'):
-                            ui.toggle(['play sound', 'mute']).bind_value(app.storage.general, 'setting_sound')
+                            ui.toggle({'volume_up': 'play sound', 'volume_off': 'mute'}).bind_value(app.storage.general, 'setting_sound')
                         
-                    with ui.menu_item():
+                    with ui.menu_item(auto_close=False):
                         with ui.item_section().props('avatar'):
-                            ui.icon(name='insert_drive_file')
+                            ui.icon(name='insert_drive_file').bind_name_from(app.storage.general, 'setting_large_files')
                         with ui.item_section():
                             ui.item_section('Large Files')
                         with ui.item_section().props('side'):
-                            ui.toggle(['compress', 'split']).bind_value(app.storage.general, 'setting_large_files')
+                            ui.toggle({'compress': 'compress', ' insert_page_break': 'split'}).bind_value(app.storage.general, 'setting_large_files')
             
         ui.button(icon='insert_drive_file', on_click=choose_files).bind_text_from(viewmodel, 'button_file_content').style('margin-top: 8px')
         ui.select(options=models, label='model').classes('w-full').bind_value(app.storage.general, 'selected_model')
