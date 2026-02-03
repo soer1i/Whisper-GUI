@@ -1,7 +1,7 @@
 import os
 import sys
 import tqdm
-from nicegui import app, ui, events
+from nicegui import app, ui, run, events
 import logging
 import asyncio
 from io import StringIO
@@ -11,8 +11,8 @@ import math
 import glob
 import openpyxl
 import simpleaudio
-from moviepy import VideoFileClip
 import platform # to detect operating system
+import ffmpeg
 
 if platform.system() == 'Linux':
     os.environ['PYWEBVIEW_GUI'] = 'qt' # needed when running on ubuntu
@@ -121,11 +121,8 @@ class ViewModel:
         self.selected_output_formats = e.value
         self.update_buttons()
 
-    def toggle_mute():
-        app.storage.general['mute'] = not app.storage.general['mute']
-
     def play_sound_effect_finished():
-        if (not app.storage.general['mute']):
+        if (not app.storage.general['setting_sound'] == 'mute'):
             sound_effect_path = "sound_effect_finished.wav"
             if not os.path.isfile(sound_effect_path):
                 sound_effect_path = os.path.join("_internal", "sound_effect_finished.wav")
@@ -188,8 +185,8 @@ async def start_reading_console():
 logger = getLogger(__name__)
 logger.setLevel("DEBUG")
 
-extensions_audio = ('.mp3','.m4a','.m4b','.m4p','.flac','.ogg','.oga','.mogg','.wav','.wma','.mmf','.aa','.aax')
-filepicker_formats_audio = "Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aax)"
+extensions_audio = ('.mp3','.m4a','.m4b','.m4p','.flac','.ogg','.oga','.mogg','.wav','.wma','.mmf','.aa','.aac','.aax')
+filepicker_formats_audio = "Audio Files (*.mp3;*.m4a;*.m4b;*.m4p;*.flac;*.ogg;*.oga;*.mogg;*.wav;*.wma;*.mmf;*.aa;*.aac;*.aax)"
 extensions_video = ('.webm','.mkv','.flv','.vob','.ogv','.ogg','.drc','.avi','.mts','.m2ts','.ts','.mov','.qt','.wmv','.rm','.rmvb','.viv','.asf','.amv','.mp4','.m4p','.m4v','.mpg','.mp2','.mpeg','.mpe','.mpv','.m2v','.m4v','.svi','.3gp','.3g2','.f4v','.f4p','.f4a','.f4b')
 filepicker_formats_video = "Video Files (*.webm;*.mkv;*.flv;*.vob;*.ogv;*.ogg;*.drc;*.avi;*.mts;*.m2ts;*.ts;*.mov;*.qt;*.wmv;*.rm;*.rmvb;*.viv;*.asf;*.amv;*.mp4;*.m4p;*.m4v;*.mpg;*.mp2;*.mpeg;*.mpe;*.mpv;*.m2v;*.m4v;*.svi;*.3gp;*.3g2;*.f4v;*.f4p;*.f4a;*.f4b)"
 async def choose_files():
@@ -224,7 +221,28 @@ async def choose_files():
 
     viewmodel.update_buttons()
 
-class AudioSplitter:
+class PrepareAudio:
+    
+    def prepare(file: str, setting_large_file: str) -> list[str, int]:
+        prepared_files = []
+
+        # if the file is a video: extract its audio
+        if PrepareAudio.file_is_video(file):
+            audio_file = PrepareAudio.extract_audio_from_video(file)
+            if audio_file is not None:
+                file = audio_file
+        
+        # if the file is larger than what whisper can transcribe: either split or compress it
+        segment_count = PrepareAudio.get_segment_count(file)
+        if segment_count > 1:
+            if setting_large_file == 'split':
+                prepared_files = PrepareAudio.split_audio(file)
+            else: #compress
+                prepared_files.append((PrepareAudio.compress_audio(file), 0))
+        else:
+            prepared_files.append((file, 0))
+        return prepared_files
+
     def split_audio(file: str) -> list[str, int]:
         """ 
         checks the size of an audio file and breaks it into equal smaller files if it is larger than <audio_segment_max_size> 
@@ -232,9 +250,9 @@ class AudioSplitter:
         it returns a list containing the filepath to the split audio segments and their start timestamp in milliseconds
         """
         split_files = []
-        segment_count = AudioSplitter.get_segment_count(file)
+        segment_count = PrepareAudio.get_segment_count(file)
         if segment_count > 1:
-            temp_dir = AudioSplitter.create_temp_dir()
+            temp_dir = PrepareAudio.create_temp_dir()
             song = AudioSegment.from_file(file)
             print(f'\nsplitting {file} into {segment_count} parts')
             segment_length_ms = len(song) / segment_count #len(song): length of song in ms (might differ from compressed audiofile as pydub converts to wav when loading audio file)
@@ -274,7 +292,7 @@ class AudioSplitter:
         return 'C:\\_lokal\\.temp'
 
     def create_temp_dir() -> str:
-        temp_dir = AudioSplitter.get_temp_dir()
+        temp_dir = PrepareAudio.get_temp_dir()
         print(f'\ntemp dir: {temp_dir}')
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
@@ -282,12 +300,11 @@ class AudioSplitter:
 
     def clear_temp_dir():
         """ removes all files in <temp_dir> """
-        temp_dir = AudioSplitter.get_temp_dir()
+        temp_dir = PrepareAudio.get_temp_dir()
         files = glob.glob(os.path.join(temp_dir,'*'))
         for f in files:
             os.remove(f)
 
-class AudioExtractor:
     def file_is_video(file: str) -> bool:
         return file.endswith(extensions_video)
 
@@ -298,12 +315,8 @@ class AudioExtractor:
         # create the filepath of the audiofile
         output_audio_path = os.path.splitext(file)[0] + '.mp3'
         try:
-            # Load the video file
-            video = VideoFileClip(file)        
-            # Extract audio
-            audio = video.audio
-            # Save the audio file
-            audio.write_audiofile(output_audio_path)
+            ffmpeg.input(file).audio.output(output_audio_path,acodec='libmp3lame').run()
+
         except Exception:
             print(Exception)
             print(f'could not extract audio from movie > {file}')
@@ -311,16 +324,34 @@ class AudioExtractor:
         
         return output_audio_path
 
-def whisper_transcribe(files: list[str], model_str: str, language_str: str , output_format: list[str]):
+    def compress_audio(file: str) -> str:
+        try:
+            # create the filepath of the audiofile
+            output_audio_path = os.path.splitext(file)[0] + '_compressed.ogg'
+            
+            ffmpeg.input(file).output(
+                output_audio_path,
+                ac=1,
+                **{
+                    'c:a': 'libopus',
+                    'b:a': '12k',
+                    'application': 'voip',
+                    'map_metadata': '-1',
+                    'vn': None,   # disables video
+                }
+            ).run()
+            
+            return output_audio_path
+        except ffmpeg.Error as e:
+            print(f"Compression failed: {e}")
+            return None
+        
+def whisper_transcribe(files: list[str], model_str: str, language_str: str , output_format: list[str], settings_large_file) -> bool:
     global transcribe_module, viewmodel
     print(f'\nloading model {model_str}, this might take some time ...')
     transcribe_module = whisper.load_model(model_str)
     for file in files:
-        if AudioExtractor.file_is_video(file):
-            audio_file = AudioExtractor.extract_audio_from_video(file)
-            if audio_file is not None:
-                file = audio_file
-        file_segments = AudioSplitter.split_audio(file)
+        file_segments = PrepareAudio.prepare(file, settings_large_file)
         results = []
         if file_segments != None and len(file_segments) > 0:
             for i in range (len(file_segments)):
@@ -341,8 +372,9 @@ def whisper_transcribe(files: list[str], model_str: str, language_str: str , out
                     segment["start"] += file_segments[i][1] / 1000 # ms to s
                     segment["end"] += file_segments[i][1] / 1000 # ms to s
                     results[0]['segments'].append(segment)
-            AudioSplitter.clear_temp_dir()
+            PrepareAudio.clear_temp_dir()
         whisper_save_result(results[0], output_format, file)
+    return True
 
 def whisper_save_result(result, output_ext: list[str], file_path: str):
     output_dir = os.path.dirname(os.path.realpath(file_path))
@@ -370,7 +402,7 @@ def whisper_save_result(result, output_ext: list[str], file_path: str):
             output_writer = whisper.utils.get_writer(ext, output_dir)
             output_writer(result, output_filename)
 
-async def start_transcribing(files, model, language, output_format):
+async def start_transcribing(files, model, language, output_format, setting_large_file):
     global viewmodel
     viewmodel.file_count += len(files)
     if files is not None and len(files) > 0:
@@ -380,12 +412,16 @@ async def start_transcribing(files, model, language, output_format):
     # get total number of segments that will be processed
     segcount = 0
     for file in files:
-        segcount += AudioSplitter.get_segment_count(file)
+        segcount += PrepareAudio.get_segment_count(file)
     viewmodel.segment_count += segcount
     viewmodel.update_label_progress()
-    # start transcribing
+    # start transcribing OLD
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format))
+    await loop.run_in_executor(None, lambda: whisper_transcribe(files, model, ViewModel.get_output_language(language), output_format, setting_large_file))
+    
+    # #start transcribing NEW
+    # await run.cpu_bound(whisper_transcribe, files, model, ViewModel.get_output_language(language), output_format)
+    
     # update labels after transcribing ends
     viewmodel.file_count -= len(files)
     viewmodel.segment_count -= segcount
@@ -403,36 +439,56 @@ def main():
         app.storage.general['selected_language'] = 'German'
     if not 'selected_output_format' in app.storage.general:
         app.storage.general['selected_output_format'] = ['xlsx', 'txt']
-    if not 'dark_mode' in app.storage.general:
-        app.storage.general['dark_mode'] = None
-    if not 'mute' in app.storage.general:
-        app.storage.general['mute'] = False
-    dark_mode = ui.dark_mode().bind_value(app.storage.general, 'dark_mode')
+    if not 'setting_theme' in app.storage.general:
+        app.storage.general['setting_theme'] = 'auto'
+    if not 'setting_sound' in app.storage.general:
+        app.storage.general['setting_sound'] = 'play sound'
+    if not 'setting_large_files' in app.storage.general:
+        app.storage.general['setting_large_files'] = 'compress'
+        
+    dark_mode = ui.dark_mode()
+
     # build page
     with ui.column().classes('w-full'):
         with ui.row().classes('w-full items-center'):
             ui.icon('record_voice_over', color='primary').classes('text-4xl')
             ui.label('Whisper Transcribe').classes('text-primary').style('font-size: 150%')
             ui.space()
-            with ui.column():
-                ui.button(icon='auto_mode', on_click=dark_mode.disable) \
-                    .props('outline round').tooltip('automatic theme').bind_visibility_from(dark_mode, 'value', lambda mode: mode is None)
-                ui.button(icon='light_mode', on_click=dark_mode.enable) \
-                    .props('outline round').tooltip('light theme').bind_visibility_from(dark_mode, 'value', value=False)
-                ui.button(icon='dark_mode', on_click=dark_mode.auto) \
-                    .props('outline round').tooltip('dark theme').bind_visibility_from(dark_mode, 'value', value=True)
-            with ui.column():
-                ui.button(icon='volume_up', on_click=ViewModel.toggle_mute) \
-                    .props('outline round').tooltip('play sound').bind_visibility_from(app.storage.general, 'mute', value=False)
-                ui.button(icon='volume_off', on_click=ViewModel.toggle_mute) \
-                    .props('outline round').tooltip('mute').bind_visibility_from(app.storage.general, 'mute', value=True)
+            with ui.button(icon='menu').props('outline'):
+                with ui.menu().props('auto-close'):
+                    with ui.menu_item():
+                        with ui.item_section().props('avatar'):
+                            ui.icon(name='auto_mode')
+                            # ui.icon(name='light_mode').bind_visibility_from(dark_mode, 'value', value=False)
+                            # ui.icon(name='dark_mode').bind_visibility_from(dark_mode, 'value', value=True)
+                        with ui.item_section():
+                            ui.item_section('Theme')
+                        with ui.item_section().props('side'):
+                            ui.toggle(['auto', 'light', 'dark'], on_change=lambda e: dark_mode.disable if e.value == 'light' else (dark_mode.enable if e.value == 'dark' else dark_mode.auto)).bind_value(app.storage.general, 'setting_theme')
+                    
+                    with ui.menu_item():
+                        with ui.item_section().props('avatar'):
+                            ui.icon(name='volume_up')
+                        with ui.item_section():
+                            ui.item_section('Sound')
+                        with ui.item_section().props('side'):
+                            ui.toggle(['play sound', 'mute']).bind_value(app.storage.general, 'setting_sound')
+                        
+                    with ui.menu_item():
+                        with ui.item_section().props('avatar'):
+                            ui.icon(name='insert_drive_file')
+                        with ui.item_section():
+                            ui.item_section('Large Files')
+                        with ui.item_section().props('side'):
+                            ui.toggle(['compress', 'split']).bind_value(app.storage.general, 'setting_large_files')
+            
         ui.button(icon='insert_drive_file', on_click=choose_files).bind_text_from(viewmodel, 'button_file_content').style('margin-top: 8px')
         ui.select(options=models, label='model').classes('w-full').bind_value(app.storage.general, 'selected_model')
         ui.select(options=languages, label='language', with_input=True).classes('w-full').bind_value(app.storage.general, 'selected_language')
         ui.select(options=output_formats, label='output', multiple=True, on_change=viewmodel.update_select_output_formats).classes('w-full').bind_value(app.storage.general, 'selected_output_format').props('use-chips')
         ui.label('Results are saved in the same directory as the original files.').style('color: #808080; font-style: italic; margin-top: 16px')
         with ui.row().classes('w-full'):
-            ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'])).bind_enabled_from(viewmodel, 'button_run_enabled')
+            ui.button('start', icon='auto_awesome', on_click=lambda: start_transcribing(viewmodel.selected_files, app.storage.general['selected_model'], app.storage.general['selected_language'], app.storage.general['selected_output_format'], app.storage.general['setting_large_files'])).bind_enabled_from(viewmodel, 'button_run_enabled')
             ui.space()
             ui.button(icon='folder', on_click=lambda: ViewModel.open_directory(viewmodel.directory_last_accessed)) \
                 .props('outline').tooltip('open last used directory').bind_visibility_from(viewmodel, 'directory_last_accessed_visible')
@@ -446,14 +502,14 @@ def main():
                     ui.label('console output').style('color: #808080')
                     ui.space()
             ui_log = ui.log(max_lines=100).classes("w-full h-40").style('white-space: pre-wrap')
-            handler = LogElementHandler(ui_log)
-            logger.addHandler(handler)
-            ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
+            # handler = LogElementHandler(ui_log)
+            # logger.addHandler(handler)
+            # ui.context.client.on_disconnect(lambda: logger.removeHandler(handler))
     
 def main():
-    app.on_startup(start_reading_console)
+    # app.on_startup(start_reading_console)
     ui.run(title='Whisper Transcribe', reload=False, native=True, window_size=[500,800], storage_secret='foobar')
 
 if __name__ == '__main__':
     main()
-
+    
