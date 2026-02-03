@@ -455,7 +455,7 @@ def main():
     if not 'setting_large_files' in app.storage.general:
         app.storage.general['setting_large_files'] = 'compress'
         
-    dark_mode = ui.dark_mode()
+    dark_theme = ui.dark_mode()
 
     # build page
     with ui.column().classes('w-full'):
@@ -473,8 +473,9 @@ def main():
                         with ui.item_section():
                             ui.item_section('Theme')
                         with ui.item_section().props('side'):
-                            ui.toggle(['auto', 'light', 'dark'], on_change=lambda e: dark_mode.disable if e.value == 'light' else (dark_mode.enable if e.value == 'dark' else dark_mode.auto)).bind_value(app.storage.general, 'setting_theme')
-                    
+                            ui.toggle(['auto', 'light', 'dark'],\
+                                       on_change=lambda e: dark_theme.disable() if str(e.value) == 'light' else (dark_theme.enable() if str(e.value) == 'dark' else dark_theme.auto())).bind_value(app.storage.general, 'setting_theme')
+         
                     with ui.menu_item():
                         with ui.item_section().props('avatar'):
                             ui.icon(name='volume_up')
